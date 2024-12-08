@@ -25,6 +25,27 @@ public class ProfileUpdateScript {
         this.conf = conf;
     }
 
+
+
+    @UpdateScript(version = 22)
+    public void workaroundForBadWebUI() {
+        if(conf.getInt("module.auto-range-ban.ipv6") == 32) { // WebUI bug
+            conf.set("module.auto-range-ban.ipv6", 60); // Fix it
+        }
+    }
+
+    @UpdateScript(version = 21)
+    public void dailyTrafficAlert() {
+        conf.set("module.active-monitoring.traffic-monitoring.daily", -1);
+    }
+
+    @UpdateScript(version = 20)
+    public void v4v6Tolerate() {
+        conf.set("module.multi-dialing-blocker.tolerate-num-ipv4", 2);
+        conf.set("module.multi-dialing-blocker.tolerate-num-ipv6", 5);
+        conf.set("module.multi-dialing-blocker.tolerate-num", null);
+    }
+
     @UpdateScript(version = 19)
     public void fastPcbTesting() {
         conf.set("module.progress-cheat-blocker.fast-pcb-test-percentage", 0.1d);

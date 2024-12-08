@@ -3,31 +3,37 @@ package com.ghostchu.peerbanhelper.downloader.impl.qbittorrent.impl;
 
 import com.ghostchu.peerbanhelper.peer.Peer;
 import com.ghostchu.peerbanhelper.peer.PeerFlag;
+import com.ghostchu.peerbanhelper.peer.PeerMessage;
 import com.ghostchu.peerbanhelper.wrapper.PeerAddress;
 import com.google.gson.annotations.SerializedName;
 import lombok.Setter;
+import lombok.ToString;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Collections;
+import java.util.List;
+
 @Setter
+@ToString
 public final class QBittorrentPeer implements Peer {
     @SerializedName("client")
     private String client;
     @SerializedName("connection")
     private String connection;
-    @SerializedName("country")
-    private String country;
-    @SerializedName("country_code")
-    private String countryCode;
+//    @SerializedName("country")
+//    private String country;
+//    @SerializedName("country_code")
+//    private String countryCode;
     @SerializedName("dl_speed")
     private Long dlSpeed;
     @SerializedName("downloaded")
     private Long downloaded;
-    @SerializedName("files")
-    private String files;
+//    @SerializedName("files")
+//    private String files;
     @SerializedName("flags")
     private String flags;
-    @SerializedName("flags_desc")
-    private String flagsDesc;
+//    @SerializedName("flags_desc")
+//    private String flagsDesc;
     @SerializedName("ip")
     private String ip;
     @SerializedName("peer_id_client")
@@ -36,8 +42,8 @@ public final class QBittorrentPeer implements Peer {
     private Integer port;
     @SerializedName("progress")
     private Double progress;
-    @SerializedName("relevance")
-    private Double relevance;
+//    @SerializedName("relevance")
+//    private Double relevance;
     @SerializedName("up_speed")
     private Long upSpeed;
     @SerializedName("uploaded")
@@ -99,30 +105,16 @@ public final class QBittorrentPeer implements Peer {
     }
 
     @Override
+    public List<PeerMessage> getSupportedMessages() {
+        return Collections.emptyList();
+    }
+
+    @Override
     public String getRawIp() {
         return rawIp == null ? ip : rawIp;
     }
 
-    @Override
-    public String toString() {
-        return "SingleTorrentPeer{" +
-               "client='" + client + '\'' +
-               ", connection='" + connection + '\'' +
-               ", country='" + country + '\'' +
-               ", countryCode='" + countryCode + '\'' +
-               ", dlSpeed=" + dlSpeed +
-               ", downloaded=" + downloaded +
-               ", files='" + files + '\'' +
-               ", flags='" + flags + '\'' +
-               ", flagsDesc='" + flagsDesc + '\'' +
-               ", ip='" + ip + '\'' +
-               ", peerIdClient='" + peerIdClient + '\'' +
-               ", port=" + port +
-               ", progress=" + progress +
-               ", relevance=" + relevance +
-               ", upSpeed=" + upSpeed +
-               ", uploaded=" + uploaded +
-               '}';
+    public String getConnection() {
+        return connection;
     }
-
 }
