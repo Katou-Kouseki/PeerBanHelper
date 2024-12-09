@@ -1,10 +1,15 @@
 package com.ghostchu.peerbanhelper.btn;
 
+import com.ghostchu.peerbanhelper.Main;
 import com.ghostchu.peerbanhelper.PeerBanHelperServer;
 import com.ghostchu.peerbanhelper.btn.ability.*;
+import com.ghostchu.peerbanhelper.database.dao.impl.PeerRecordDao;
+import com.ghostchu.peerbanhelper.scriptengine.ScriptEngine;
 import com.ghostchu.peerbanhelper.text.Lang;
 import com.ghostchu.peerbanhelper.util.HTTPUtil;
 import com.ghostchu.peerbanhelper.util.rule.ModuleMatchCache;
+import com.ghostchu.simplereloadlib.ReloadResult;
+import com.ghostchu.simplereloadlib.Reloadable;
 import com.github.mizosoft.methanol.Methanol;
 import com.github.mizosoft.methanol.MutableRequest;
 import com.google.gson.JsonObject;
@@ -12,7 +17,7 @@ import com.google.gson.JsonParser;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Component;
 
 import java.net.CookieManager;
 import java.net.CookiePolicy;
@@ -30,10 +35,14 @@ import static com.ghostchu.peerbanhelper.text.TextManager.tlUI;
 
 @Slf4j
 @Getter
-public class BtnNetwork {
-    private static final int PBH_BTN_PROTOCOL_IMPL_VERSION = 7;
+@Component
+// 特别注意：该类不允许静态初始化任何内容
+public class BtnNetwork implements Reloadable {
     @Getter
     private final Map<Class<? extends BtnAbility>, BtnAbility> abilities = new HashMap<>();
+    private final ScriptEngine scriptEngine;
+    private final AtomicBoolean configSuccess = new AtomicBoolean(false);
+    private boolean scriptExecute;
     @Getter
     private ScheduledExecutorService executeService = null;
     private String configUrl;
@@ -42,51 +51,77 @@ public class BtnNetwork {
     private String appSecret;
     @Getter
     private HttpClient httpClient;
-    @Autowired
-    @Qualifier("userAgent")
-    private String userAgent;
     private PeerBanHelperServer server;
-    private final AtomicBoolean configSuccess = new AtomicBoolean(false);
     @Autowired
+    private PeerRecordDao peerRecordDao;
     private ModuleMatchCache moduleMatchCache;
+    private boolean enabled;
 
-    public BtnNetwork(PeerBanHelperServer server, String userAgent, String configUrl, boolean submit, String appId, String appSecret) {
+    public BtnNetwork(PeerBanHelperServer server, ScriptEngine scriptEngine, ModuleMatchCache moduleMatchCache) {
         this.server = server;
-        this.userAgent = userAgent;
-        this.configUrl = configUrl;
-        this.submit = submit;
-        this.appId = appId;
-        this.appSecret = appSecret;
+        this.scriptEngine = scriptEngine;
+        this.moduleMatchCache = moduleMatchCache;
+        Main.getReloadManager().register(this);
+        reloadConfig();
+    }
+
+    @Override
+    public ReloadResult reloadModule() throws Exception {
+        reloadConfig();
+        return Reloadable.super.reloadModule();
+    }
+
+    public void reloadConfig() {
+        this.enabled = Main.getMainConfig().getBoolean("btn.enabled");
+        this.configUrl = Main.getMainConfig().getString("btn.config-url");
+        this.submit = Main.getMainConfig().getBoolean("btn.submit");
+        this.appId = Main.getMainConfig().getString("btn.app-id");
+        this.appSecret = Main.getMainConfig().getString("btn.app-secret");
+        this.scriptExecute = Main.getMainConfig().getBoolean("btn.allow-script-execute");
+        resetAbilities();
         setupHttpClient();
         resetScheduler();
         checkIfNeedRetryConfig();
+    }
+
+    private void resetAbilities() {
+        abilities.values().forEach(BtnAbility::unload);
+        abilities.clear();
     }
 
     private void resetScheduler() {
         if (executeService != null) {
             executeService.shutdownNow();
         }
-        executeService = Executors.newScheduledThreadPool(2);
-        executeService.scheduleWithFixedDelay(this::checkIfNeedRetryConfig, 600, 600, TimeUnit.SECONDS);
+        if (enabled) {
+            executeService = Executors.newScheduledThreadPool(2);
+            executeService.scheduleWithFixedDelay(this::checkIfNeedRetryConfig, 600, 600, TimeUnit.SECONDS);
+        } else {
+            executeService = null;
+        }
     }
 
     public void configBtnNetwork() {
+        String response = "<Not Provided>";
+        int statusCode = 0;
         try {
             HttpResponse<String> resp = HTTPUtil.retryableSend(httpClient, MutableRequest.GET(configUrl), HttpResponse.BodyHandlers.ofString()).join();
             if (resp.statusCode() != 200) {
                 log.error(tlUI(Lang.BTN_CONFIG_FAILS, resp.statusCode() + " - " + resp.body(), 600));
                 return;
             }
-            JsonObject json = JsonParser.parseString(resp.body()).getAsJsonObject();
+            statusCode = resp.statusCode();
+            response = resp.body();
+            JsonObject json = JsonParser.parseString(response).getAsJsonObject();
             if (!json.has("min_protocol_version")) {
-                throw new IllegalStateException("Server config response missing min_protocol_version field");
+                throw new IllegalStateException(tlUI(Lang.MISSING_VERSION_PROTOCOL_FIELD));
             }
             int min_protocol_version = json.get("min_protocol_version").getAsInt();
-            if (PBH_BTN_PROTOCOL_IMPL_VERSION < min_protocol_version) {
+            if (Main.PBH_BTN_PROTOCOL_IMPL_VERSION < min_protocol_version) {
                 throw new IllegalStateException(tlUI(Lang.BTN_INCOMPATIBLE_SERVER));
             }
             int max_protocol_version = json.get("max_protocol_version").getAsInt();
-            if (PBH_BTN_PROTOCOL_IMPL_VERSION > max_protocol_version) {
+            if (Main.PBH_BTN_PROTOCOL_IMPL_VERSION > max_protocol_version) {
                 throw new IllegalStateException(tlUI(Lang.BTN_INCOMPATIBLE_SERVER));
             }
             resetScheduler();
@@ -99,35 +134,45 @@ public class BtnNetwork {
             if (ability.has("submit_bans") && submit) {
                 abilities.put(BtnAbilitySubmitBans.class, new BtnAbilitySubmitBans(this, ability.get("submit_bans").getAsJsonObject()));
             }
+            if (ability.has("submit_histories") && submit) {
+                abilities.put(BtnAbilitySubmitHistory.class, new BtnAbilitySubmitHistory(this, ability.get("submit_histories").getAsJsonObject()));
+            }
 //            if (ability.has("submit_hitrate") && submit) {
 //                abilities.put(BtnAbilitySubmitRulesHitRate.class, new BtnAbilitySubmitRulesHitRate(this, ability.get("submit_hitrate").getAsJsonObject()));
 //            }
             if (ability.has("rules")) {
-                abilities.put(BtnAbilityRules.class, new BtnAbilityRules(this, ability.get("rules").getAsJsonObject()));
+                abilities.put(BtnAbilityRules.class, new BtnAbilityRules(this, scriptEngine, ability.get("rules").getAsJsonObject(), scriptExecute));
             }
             if (ability.has("reconfigure")) {
                 abilities.put(BtnAbilityReconfigure.class, new BtnAbilityReconfigure(this, ability.get("reconfigure").getAsJsonObject()));
+            }
+            if (ability.has("exception")) {
+                abilities.put(BtnAbilityException.class, new BtnAbilityReconfigure(this, ability.get("exception").getAsJsonObject()));
             }
             abilities.values().forEach(a -> {
                 try {
                     a.load();
                 } catch (Exception e) {
-                    log.error("Failed to load BTN ability", e);
+                    log.error(tlUI(Lang.UNABLE_LOAD_BTN_ABILITY, a.getClass().getSimpleName()), e);
                 }
             });
             configSuccess.set(true);
         } catch (Throwable e) {
-            log.error(tlUI(Lang.BTN_CONFIG_FAILS, 600), e);
+            log.error(tlUI(Lang.BTN_CONFIG_FAILS, statusCode+" - "+response, 600), e);
         }
     }
 
     private void checkIfNeedRetryConfig() {
         try {
-            if (!configSuccess.get()) {
-                configBtnNetwork();
+            if (enabled) {
+                if (!configSuccess.get()) {
+                    configBtnNetwork();
+                }
+            } else {
+                configSuccess.set(false);
             }
         } catch (Throwable throwable) {
-            log.error("Unable to complete scheduled tasks", throwable);
+            log.error(tlUI(Lang.UNABLE_COMPLETE_SCHEDULE_TASKS), throwable);
         }
 
     }
@@ -138,8 +183,7 @@ public class BtnNetwork {
         this.httpClient = Methanol
                 .newBuilder()
                 .followRedirects(HttpClient.Redirect.ALWAYS)
-                .userAgent(userAgent)
-                .defaultHeader("Accept-Encoding", "gzip,deflate")
+                .userAgent(Main.getUserAgent())
                 .defaultHeader("Content-Type", "application/json")
                 .defaultHeader("BTN-AppID", appId)
                 .defaultHeader("BTN-AppSecret", appSecret)

@@ -4,8 +4,11 @@ import com.ghostchu.peerbanhelper.database.Database;
 import com.ghostchu.peerbanhelper.database.dao.AbstractPBHDao;
 import com.ghostchu.peerbanhelper.database.table.PeerRecordEntity;
 import com.ghostchu.peerbanhelper.database.table.TorrentEntity;
+import com.ghostchu.peerbanhelper.util.paging.Page;
+import com.ghostchu.peerbanhelper.util.paging.Pageable;
 import com.ghostchu.peerbanhelper.wrapper.PeerWrapper;
 import com.ghostchu.peerbanhelper.wrapper.TorrentWrapper;
+import com.j256.ormlite.stmt.SelectArg;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -36,6 +39,16 @@ public class PeerRecordDao extends AbstractPBHDao<PeerRecordEntity, Long> {
             }
             return null;
         });
+    }
+
+    public Page<PeerRecordEntity> getPendingSubmitPeerRecords(Pageable pageable, Timestamp afterThan) throws SQLException {
+        var queryBuilder = queryBuilder().where()
+                .gt("lastTimeSeen", afterThan)
+                .or()
+                .isNull("lastTimeSeen")
+                .queryBuilder()
+                .orderBy("lastTimeSeen", false);
+        return queryByPaging(queryBuilder, pageable);
     }
 
     private int writeToDatabase(long timestamp, String downloader, TorrentWrapper torrent, PeerWrapper peer) throws SQLException {
@@ -86,11 +99,11 @@ public class PeerRecordDao extends AbstractPBHDao<PeerRecordEntity, Long> {
     @Override
     public synchronized PeerRecordEntity createIfNotExists(PeerRecordEntity data) throws SQLException {
         PeerRecordEntity existing = queryBuilder().where()
-                .eq("address", data.getAddress())
+                .eq("address", new SelectArg(data.getAddress()))
                 .and()
                 .eq("torrent_id", data.getTorrent().getId())
                 .and()
-                .eq("downloader", data.getDownloader())
+                .eq("downloader", new SelectArg(data.getDownloader()))
                 .queryForFirst();
         if (existing == null) {
             create(data);

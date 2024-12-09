@@ -7,9 +7,13 @@ import loginLocale from '@/views/login/locale/en-US'
 import oobeLocale from '@/views/oobe/locale/en-US'
 import topBanPageLocale from '@/views/ranks/locale/en-US'
 import ruleManageMentLocale from '@/views/rule-management/locale/en-US'
-import ruleMetricsLocale from '@/views/rule-metrics/locale/en-US'
+import configLocale from '@/views/settings/locale/en-US'
+import scriptLocale from '@/views/custom-script/locale/en-US'
+import alertLocale from './en-US/alert'
+import copierLocale from './en-US/copier'
 import plusLocale from './en-US/plus'
 import settingsLocale from './en-US/settings'
+
 export default {
   'navbar.action.locale': 'Switch to English',
   'navbar.action.autoUpdate': 'Auto Update',
@@ -32,7 +36,9 @@ export default {
   'router.metrics': 'Metrics',
   'router.metrics.ruleMetrics': 'Rule Metrics',
   'router.metrics.charts': 'Charts',
-  'router.rule_management': 'Rule Management',
+  'router.rule_management': 'Rule',
+  'router.config': 'Preferences',
+  'router.script': 'Custom Script',
 
   'router.moduleNotEnable': '{moduleName} is not enabled',
   'router.moduleNotEnable.tips': 'Please enable the feature in the configuration file',
@@ -52,10 +58,13 @@ export default {
   ...banListPageLocale,
   ...dataLocale,
   ...topBanPageLocale,
-  ...ruleMetricsLocale,
   ...serviceLocale,
   ...loginLocale,
   ...oobeLocale,
   ...ruleManageMentLocale,
-  ...chartsLocale
+  ...chartsLocale,
+  ...configLocale,
+  ...alertLocale,
+  ...copierLocale,
+  ...scriptLocale
 }
