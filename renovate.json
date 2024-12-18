@@ -3,7 +3,21 @@
   "extends": [
     "config:recommended"
   ],
+  "ignoreDeps": [
+    "com.github.oshi:oshi-core",
+    "org.xerial:sqlite-jdbc",
+    "com.ghostchu.peerbanhelper.external-libs:sqlite-jdbc-loongarch64"
+  ],
+  "baseBranches": [
+    "dev"
+  ],
   "packageRules": [
+    {
+      "matchFileNames": [
+        "webui/package.json"
+      ],
+      "dependencyDashboardApproval": true
+    },
     {
       "matchPackageNames": [
         "*"
@@ -22,7 +36,7 @@
       "groupName": "default"
     },
     {
-      "depTypeList": [
+      "matchDepTypes": [
         "devDependencies"
       ],
       "automerge": true,

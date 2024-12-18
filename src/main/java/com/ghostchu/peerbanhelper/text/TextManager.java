@@ -60,7 +60,7 @@ public class TextManager implements Reloadable {
 //    }
 
     public static String tl(String locale, Lang key, Object... params) {
-        return tl(locale, new TranslationComponent(key.getKey(), (Object[]) TextManager.convert(locale, params)));
+        return tl(locale, new TranslationComponent(key.getKey(), (Object[]) convert(locale, params)));
     }
 
     public static String tl(String locale, TranslationComponent translationComponent) {
@@ -75,7 +75,7 @@ public class TextManager implements Reloadable {
         }
         String str = yamlConfiguration.getString(translationComponent.getKey());
         if (str == null) {
-            return translationComponent.getKey();
+            str = translationComponent.getKey();
         }
         String[] params = convert(locale, translationComponent.getParams());
         for (PostProcessor postProcessor : INSTANCE_HOLDER.postProcessors) {
@@ -108,6 +108,10 @@ public class TextManager implements Reloadable {
                     components[i] = tl(locale, translationComponent);
                     continue;
                 }
+//                if (obj instanceof Map map) { // 简单修复 GSON 嵌套反序列化问题
+//                    components[i] = tl(locale, JsonUtil.standard().fromJson(JsonUtil.standard().toJsonTree(map), TranslationComponent.class));
+//                    continue;
+//                }
                 components[i] = obj.toString();
             } catch (Exception exception) {
                 log.debug("Failed to process the object: {}", obj);
@@ -123,7 +127,7 @@ public class TextManager implements Reloadable {
      * Loading Crowdin OTA module and i18n system
      */
     public void load() {
-        log.info("Loading up translations, this may need a while...");
+        log.info("Loading up translations, this may take a while...");
         //TODO: This will break the message processing system in-game until loading finished, need to fix it.
         this.reset();
         // first, we need load built-in fallback translation.
@@ -131,8 +135,6 @@ public class TextManager implements Reloadable {
         // second, load the bundled language files
         loadBundled().forEach(languageFilesManager::deploy);
         // then, load the translations from Crowdin
-        // and don't forget fix missing
-        languageFilesManager.fillMissing(loadBuiltInFallback());
         // finally, load override translations
         Collection<String> pending = getOverrideLocales(languageFilesManager.getDistributions().keySet());
         log.debug("Pending: {}", Arrays.toString(pending.toArray()));
@@ -168,6 +170,7 @@ public class TextManager implements Reloadable {
             pending.add("en_us");
             this.languageFilesManager.deploy("en_us", loadBuiltInFallback());
         }
+        this.languageFilesManager.fillMissing( loadBuiltInFallback());
         // Remember all available languages
         availableLanguages.addAll(pending);
 

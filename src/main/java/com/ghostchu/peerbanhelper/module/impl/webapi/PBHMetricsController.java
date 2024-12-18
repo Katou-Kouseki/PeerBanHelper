@@ -3,18 +3,16 @@ package com.ghostchu.peerbanhelper.module.impl.webapi;
 import com.ghostchu.peerbanhelper.database.dao.impl.HistoryDao;
 import com.ghostchu.peerbanhelper.database.table.HistoryEntity;
 import com.ghostchu.peerbanhelper.metric.BasicMetrics;
-import com.ghostchu.peerbanhelper.metric.HitRateMetricRecorder;
 import com.ghostchu.peerbanhelper.module.AbstractFeatureModule;
-import com.ghostchu.peerbanhelper.text.TranslationComponent;
 import com.ghostchu.peerbanhelper.util.MiscUtil;
 import com.ghostchu.peerbanhelper.util.WebUtil;
 import com.ghostchu.peerbanhelper.util.context.IgnoreScan;
-import com.ghostchu.peerbanhelper.util.rule.Rule;
 import com.ghostchu.peerbanhelper.web.JavalinWebContainer;
 import com.ghostchu.peerbanhelper.web.Role;
 import com.ghostchu.peerbanhelper.web.wrapper.StdResp;
 import com.ghostchu.peerbanhelper.wrapper.BanMetadata;
 import com.ghostchu.peerbanhelper.wrapper.PeerAddress;
+import com.j256.ormlite.stmt.SelectArg;
 import io.javalin.http.Context;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -29,8 +27,6 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
-
-import static com.ghostchu.peerbanhelper.text.TextManager.tl;
 
 @Component
 @IgnoreScan
@@ -52,9 +48,35 @@ public class PBHMetricsController extends AbstractFeatureModule {
     public void onEnable() {
         webContainer.javalin()
                 .get("/api/statistic/counter", this::handleBasicCounter, Role.USER_READ)
-                .get("/api/statistic/rules", this::handleRules, Role.USER_READ)
                 .get("/api/statistic/analysis/field", this::handleHistoryNumberAccess, Role.USER_READ)
+                .get("/api/statistic/analysis/banTrends", this::handleBanTrends, Role.USER_READ)
                 .get("/api/statistic/analysis/date", this::handleHistoryDateAccess, Role.USER_READ);
+    }
+
+    private void handleBanTrends(Context ctx) throws Exception {
+        var downloader = ctx.queryParam("downloader");
+        var timeQueryModel = WebUtil.parseTimeQueryModel(ctx);
+        Map<Long, AtomicInteger> bannedPeerTrends = new ConcurrentHashMap<>();
+        var queryBanned = historyDao.queryBuilder()
+                .selectColumns("id", "banAt")
+                .where()
+                .ge("banAt", timeQueryModel.startAt())
+                .and()
+                .le("banAt", timeQueryModel.endAt());
+        if (downloader != null && !downloader.isBlank()) {
+            queryBanned.and().eq("downloader", new SelectArg(downloader));
+        }
+        try (var it = queryBanned.iterator()) {
+            while (it.hasNext()) {
+                var startOfDay = MiscUtil.getStartOfToday(it.next().getBanAt().getTime());
+                bannedPeerTrends.computeIfAbsent(startOfDay, k -> new AtomicInteger()).addAndGet(1);
+            }
+        }
+        ctx.json(new StdResp(true, null, bannedPeerTrends.entrySet().stream()
+                .map((e) -> new PBHChartController.SimpleLongIntKV(e.getKey(), e.getValue().intValue()))
+                .sorted(Comparator.comparingLong(PBHChartController.SimpleLongIntKV::key))
+                .toList()
+        ));
     }
 
     private void handleHistoryDateAccess(Context ctx) throws Exception {
@@ -65,9 +87,8 @@ public class PBHMetricsController extends AbstractFeatureModule {
         if (field == null) {
             throw new IllegalArgumentException("startAt cannot be null");
         }
-
-        if(field.equalsIgnoreCase("banAt")){
-            if("day".equals(type)){
+        if (field.equalsIgnoreCase("banAt")) {
+            if ("day".equals(type)) {
                 // 劫持单独处理以加快首屏请求
                 handlePeerBans(ctx);
                 return;
@@ -153,9 +174,14 @@ public class PBHMetricsController extends AbstractFeatureModule {
         String type = ctx.queryParam("type");
         String field = ctx.queryParam("field");
         double filter = Double.parseDouble(Objects.requireNonNullElse(ctx.queryParam("filter"), "0.0"));
+        String downloader = ctx.queryParam("downloader");
+        Integer substringLength = null;
+        if ("peerId".equalsIgnoreCase(field)) {
+            substringLength = 8;
+        }
         List<HistoryDao.UniversalFieldNumResult> results = switch (type) {
-            case "count" -> historyDao.countField(field, filter);
-            case "sum" -> historyDao.sumField(field, filter);
+            case "count" -> historyDao.countField(field, filter, downloader, substringLength);
+            case "sum" -> historyDao.sumField(field, filter, downloader, substringLength);
             case null, default -> throw new IllegalArgumentException("type invalid");
         };
         ctx.json(new StdResp(true, null, results));
@@ -177,28 +203,7 @@ public class PBHMetricsController extends AbstractFeatureModule {
                 bannedPeerTrends.computeIfAbsent(startOfDay, k -> new AtomicInteger()).addAndGet(1);
             }
         }
-        ctx.json(new StdResp(true, null, bannedPeerTrends.entrySet().stream().map((e)-> new HistoryDao.UniversalFieldDateResult(e.getKey(), e.getValue().intValue() , 0)).toList()));
-    }
-    private void handleRules(Context ctx) {
-        String locale = locale(ctx);
-        Map<Rule, HitRateMetricRecorder> metric = new HashMap<>(getServer().getHitRateMetric().getHitRateMetric().asMap());
-        Map<String, String> dict = new HashMap<>();
-        List<RuleData> dat = metric.entrySet().stream()
-                .map(obj -> {
-                    TranslationComponent ruleType = new TranslationComponent(obj.getKey().getClass().getName());
-                    if (obj.getKey().matcherName() != null) {
-                        ruleType = obj.getKey().matcherName();
-                    }
-                    // 返回特定计算值作为字典键，这样不需要修改前端
-                    dict.put(tl(locale, ruleType), tl(locale, ruleType));
-                    return new RuleData(tl(locale, ruleType), obj.getValue().getHitCounter(), obj.getValue().getQueryCounter(), obj.getKey().metadata());
-                })
-                .sorted((o1, o2) -> Long.compare(o2.getHit(), o1.getHit()))
-                .toList();
-        Map<String, Object> resp = new HashMap<>();
-        resp.put("dict", dict);
-        resp.put("data", dat);
-        ctx.json(new StdResp(true, null, resp));
+        ctx.json(new StdResp(true, null, bannedPeerTrends.entrySet().stream().map((e) -> new HistoryDao.UniversalFieldDateResult(e.getKey(), e.getValue().intValue(), 0)).toList()));
     }
 
     private void handleBasicCounter(Context ctx) {
@@ -241,7 +246,7 @@ public class PBHMetricsController extends AbstractFeatureModule {
         private String type;
         private long hit;
         private long query;
-        private Map<String, Object> metadata;
+        private String metadata;
     }
 
 }

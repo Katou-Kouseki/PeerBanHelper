@@ -1,0 +1,116 @@
+# PeerBanHelper
+[简体中文](./README.md)
+
+Automatically block unwanted, leeches and abnormal BT peers with support for customized and cloud rules.
+
+![page-views](https://raw.githubusercontent.com/PBH-BTN/views-counter/refs/heads/master/svg/754169590/badge.svg)
+## Introduction
+
+The following functions are provided by PeerBanHelper:
+
+- [PeerID Blacklist](https://docs.pbh-btn.com/en/docs/module/peer-id)
+- [Client Name Blacklist](https://docs.pbh-btn.com/en/docs/module/client-name)
+- [IP/GeoIP/IP type Blacklist](https://docs.pbh-btn.com/en/docs/module/ip-address-blocker)
+- [Fake progress checker (heuristic client detection)](https://docs.pbh-btn.com/en/docs/module/progress-cheat-blocker)
+- [Auto range ban](https://docs.pbh-btn.com/en/docs/module/auto-range-ban)
+- [Multi-dial ban](https://docs.pbh-btn.com/en/docs/module/multi-dial)
+- Peer ID/Client Name camouflage check, powered by [AviatorScript Engine](https://docs.pbh-btn.com/en/docs/module/expression-engine)
+- [Active monitoring(data analysis)](https://docs.pbh-btn.com/en/docs/module/active-monitoring)
+- [IP set subscribe](https://docs.pbh-btn.com/en/docs/module/ip-address-blocker-rules)
+- A modern WebUI
+
+In addition, PeerBanHelper downloads the GeoIP library at startup and supports the following functions once it has been successfully loaded:
+- View IP address attribution, AS information (ASN, ISP, AS name, etc.), network type information (broadband, base station, IoT, data center, etc.) in the blocking list.
+- Based on GeoIP information, block IP addresses by country/region, city, network type, ASN and so on.
+- View GeoIP statistics
+
+> [!TIP]
+> For best results, it is recommended to work with the IP rule [PBH-BTN/BTN-Collected-Rules](https://github.com/PBH-BTN/BTN-Collected-Rules) and [BTN Network](https://docs.pbh-btn.com/en/docs/btn/intro) , but this is completely optional.
+
+
+## Supported clients
+
+- qBittorrent **4.5.0 or higher**
+- BiglyBT([plugin](https://github.com/PBH-BTN/PBH-Adapter-BiglyBT) is required)
+- Deluge([plugin](https://github.com/PBH-BTN/PBH-Adapter-Deluge) is required)
+- Azureus(Vuze)([plugin](https://github.com/PBH-BTN/PBH-Adapter-Azureus) is required)
+- Transmission **(deprecated; 3.00-20 or higher)**
+- BitComet **v2.10 Beta6 [20240928] or higher** (P2SP LTSeed mode is not supported)
+
+
+# Screenshots
+
+| Dashboard                                                                                                                             | Banlist                                                                                                                              | Banlogs                                                                                                                              | Rule subscribe                                                                                                                          |
+| :------------------------------------------------------------------------------------------------------------------------------------ | :----------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------- |
+| <img width="1280" alt="homepage" src="https://github.com/PBH-BTN/PeerBanHelper/assets/19235246/d7f7ea9f-70df-40f1-a782-260450972bc9"> | <img width="1280" alt="banlist" src="https://github.com/PBH-BTN/PeerBanHelper/assets/19235246/c3e139e6-eb82-423f-b083-1839713ec801"> | <img width="1280" alt="banlogs" src="https://github.com/PBH-BTN/PeerBanHelper/assets/19235246/00d8efcc-0dd7-4e05-bdeb-9444e14739d6"> | <img width="1280" alt="banMetrics" src="https://github.com/PBH-BTN/PeerBanHelper/assets/19235246/dc312186-9643-4f23-9d53-7b8e0852f228"> |
+
+## Install
+
+Please read the [docs](https://docs.pbh-btn.com/en/docs/category/%E5%AE%89%E8%A3%85%E9%83%A8%E7%BD%B2)
+
+
+## FAQ
+
+Before submitting an issue, please read the [FAQ](https://docs.pbh-btn.com/en/docs/faq)
+
+## Support
+Consider join our [Telegram](https://t.me/+_t3Nt5GZ6bJmYjBl) group.
+
+## Declaration
+
+**Using this software means you agree to the following statement:**
+
+Illegal websites and black-grey production, DO NOT initiate any form of manual service requests to our organization's development or support staff; it is strictly forbidden to use any results of the PBH-BTN team (including but not limited to code, images, programs, BTN rule sets, etc.) to engage in any illegal activities such as violating laws and regulations, endangering national security, implementing or assisting others in implementing telecommunications crimes. 
+Users may not use any results of the PBH-BTN team (including but not limited to code, images, programs, BTN rule sets, etc.) to carry out any activities that harm the interests of other individuals or organizations. The use of any services or products of the PBH-BTN team in any case that violates the rights of individuals or organizations is not allowed.
+Any consequences caused by the user's use of this software are borne by the user and have nothing to do with the software developer."
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=PBH-BTN/PeerBanHelper&type=Date)](https://star-history.com/#PBH-BTN/PeerBanHelper&Date)
+
+## Tools
+
+In the development process of PeerBanHelper, we have used many excellent professional tools. Thanks to the following companies or projects for providing open-source licenses:
+
+### Install4j
+
+PeerBanHelper use [Install4j multi-platform installer builder](https://www.ej-technologies.com/products/install4j/overview.html) to build its multi-platform installer. Thanks the open-source license provided by ej-technolgies. Click the link or the image below to download install4j.
+
+[![Install4j](https://www.ej-technologies.com/images/product_banners/install4j_large.png)](https://www.ej-technologies.com/products/install4j/overview.html)
+
+### JProfiler
+
+PeerBanHelper use [JProfiler all-in one Java profiler](https://www.ej-technologies.com/jprofiler) to analyze and optimize the program. Thanks the open-source license provided by ej-technolgies. Click the link or the image below to download JProfiler.
+
+[![JProfiler](https://www.ej-technologies.com/images/product_banners/jprofiler_large.png)](https://www.ej-technologies.com/jprofiler)
+
+## Credit
+
+### Backend
+
+- [Cordelia](https://github.com/bochkov/cordelia)
+- [IPAddress](https://github.com/seancfoley/IPAddress)
+- [YamlConfiguration](https://github.com/bspfsystems/YamlConfiguration)
+- [libby](https://github.com/AlessioDP/libby)
+- [AviatorScript](https://github.com/killme2008/aviatorscript)
+- [javalin](https://javalin.io/)
+- [deluge-java](https://github.com/RangerRick/deluge-java)
+- [jSystemThemeDetector](https://github.com/Dansoftowner/jSystemThemeDetector)
+- [Methanol](https://github.com/mizosoft/methanol)
+- [Flatlaf](https://github.com/JFormDesigner/FlatLaf)
+- [GeoIP2](https://dev.maxmind.com/geoip)
+- [ormlite](https://ormlite.com/)
+- [SimpleReloadLib](https://github.com/Ghost-chu/SimpleReloadLib)
+- [java-ipfs-http-client](https://github.com/ipfs-shipyard/java-ipfs-http-client)
+- [java-multiaddr](https://github.com/multiformats/java-multiaddr)
+- [portmapper](https://github.com/offbynull/portmapper)
+- [xz](https://github.com/tukaani-project/xz-java)
+- [commonmark](https://github.com/commonmark/commonmark-java)
+- [oshi](https://github.com/oshi/oshi)
+- [semver4j](https://github.com/vdurmont/semver4j)
+
+### WebUI
+
+- [Vue](https://vuejs.org/)
+- [ArcoDesign](https://arco.design/)
+- [ECharts](https://echarts.apache.org/en/index.html)

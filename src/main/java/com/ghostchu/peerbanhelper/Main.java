@@ -1,41 +1,47 @@
 package com.ghostchu.peerbanhelper;
 
-import com.alessiodp.libby.LibraryManager;
-import com.alessiodp.libby.logging.LogLevel;
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.core.rolling.RollingFileAppender;
+import ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy;
 import com.ghostchu.peerbanhelper.config.MainConfigUpdateScript;
 import com.ghostchu.peerbanhelper.config.PBHConfigUpdater;
 import com.ghostchu.peerbanhelper.config.ProfileUpdateScript;
 import com.ghostchu.peerbanhelper.event.PBHShutdownEvent;
 import com.ghostchu.peerbanhelper.gui.PBHGuiManager;
 import com.ghostchu.peerbanhelper.gui.impl.console.ConsoleGuiImpl;
-import com.ghostchu.peerbanhelper.gui.impl.javafx.JavaFxImpl;
 import com.ghostchu.peerbanhelper.gui.impl.swing.SwingGuiImpl;
-import com.ghostchu.peerbanhelper.util.PBHLibrariesLoader;
-import com.ghostchu.peerbanhelper.util.Slf4jLogAppender;
+import com.ghostchu.peerbanhelper.text.Lang;
+import com.ghostchu.peerbanhelper.text.TextManager;
 import com.ghostchu.simplereloadlib.ReloadManager;
+import com.ghostchu.simplereloadlib.ReloadResult;
+import com.ghostchu.simplereloadlib.ReloadStatus;
 import com.google.common.eventbus.EventBus;
-import com.google.common.io.ByteStreams;
 import lombok.Getter;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.bspfsystems.yamlconfiguration.configuration.InvalidConfigurationException;
 import org.bspfsystems.yamlconfiguration.file.YamlConfiguration;
 import org.jetbrains.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.support.BeanDefinitionBuilder;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import oshi.SystemInfo;
 
 import javax.swing.*;
 import java.awt.*;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Locale;
-import java.util.Map;
+import java.util.Properties;
 
 @Slf4j
 public class Main {
@@ -51,7 +57,6 @@ public class Main {
     @Getter
     private static File configDirectory;
     private static File pluginDirectory;
-    private static File libraryDirectory;
     @Getter
     private static File debugDirectory;
     @Getter
@@ -62,10 +67,10 @@ public class Main {
     private static File mainConfigFile;
     @Getter
     private static File profileConfigFile;
-    @Getter
-    private static LibraryManager libraryManager;
-    @Getter
-    private static PBHLibrariesLoader librariesLoader;
+    //    @Getter
+//    private static LibraryManager libraryManager;
+//    @Getter
+//    private static PBHLibrariesLoader librariesLoader;
     @Getter
     private static AnnotationConfigApplicationContext applicationContext;
     @Getter
@@ -78,33 +83,27 @@ public class Main {
     private static BuildMeta meta;
     @Getter
     private static String[] startupArgs;
+    @Getter
+    private static long startupAt = System.currentTimeMillis();
+    private static String userAgent;
+    public static final int PBH_BTN_PROTOCOL_IMPL_VERSION = 8;
+    public static final String PBH_BTN_PROTOCOL_READABLE_VERSION = "0.0.3";
 
     public static void main(String[] args) {
         startupArgs = args;
+        setupReloading();
         setupConfDirectory(args);
-        setupLog4j2();
-        Path librariesPath = dataDirectory.toPath().toAbsolutePath().resolve("libraries");
-        libraryManager = new PBHLibraryManager(
-                new Slf4jLogAppender(),
-                Main.getDataDirectory().toPath(), "libraries"
-        );
-        boolean nogui = !Desktop.isDesktopSupported() || System.getProperty("pbh.nogui") != null || Arrays.stream(args).anyMatch(arg -> arg.equalsIgnoreCase("nogui"));
-        libraryManager.setLogLevel(LogLevel.ERROR);
-        librariesLoader = new PBHLibrariesLoader(libraryManager, librariesPath, !nogui);
+        loadFlagsProperties();
+        setupLogback();
         meta = buildMeta();
         setupConfiguration();
-        mainConfigFile = new File(configDirectory, "config.yml");
-        mainConfig = loadConfiguration(mainConfigFile);
-        new PBHConfigUpdater(mainConfigFile, mainConfig, Main.class.getResourceAsStream("/config.yml")).update(new MainConfigUpdateScript(mainConfig));
-        profileConfigFile = new File(configDirectory, "profile.yml");
-        profileConfig = loadConfiguration(profileConfigFile);
-        new PBHConfigUpdater(profileConfigFile, profileConfig, Main.class.getResourceAsStream("/profile.yml")).update(new ProfileUpdateScript(profileConfig));
-        log.info("Current system language tag: {}", Locale.getDefault().toLanguageTag());
+        String defLocaleTag = Locale.getDefault().getLanguage() + "-" + Locale.getDefault().getCountry();
+        log.info("Current system language tag: {}", defLocaleTag);
         DEF_LOCALE = mainConfig.getString("language");
         if (DEF_LOCALE == null || DEF_LOCALE.equalsIgnoreCase("default")) {
             DEF_LOCALE = System.getenv("PBH_USER_LOCALE");
-            if(DEF_LOCALE == null) {
-                DEF_LOCALE = Locale.getDefault().toLanguageTag();
+            if (DEF_LOCALE == null) {
+                DEF_LOCALE = defLocaleTag;
             }
         }
         DEF_LOCALE = DEF_LOCALE.toLowerCase(Locale.ROOT).replace("-", "_");
@@ -113,23 +112,77 @@ public class Main {
         pbhServerAddress = mainConfig.getString("server.prefix", "http://127.0.0.1:" + mainConfig.getInt("server.http"));
         setupProxySettings();
         try {
-            log.info("Loading application context, this may need a while on low-end devices, please wait...");
+            log.info(TextManager.tlUI(Lang.SPRING_CONTEXT_LOADING));
             applicationContext = new AnnotationConfigApplicationContext();
             applicationContext.register(AppConfig.class);
             applicationContext.refresh();
-            registerBean(File.class, mainConfigFile, "mainConfigFile");
-            registerBean(File.class, profileConfigFile, "profileConfigFile");
-            registerBean(YamlConfiguration.class, mainConfig, "mainConfig");
-            registerBean(YamlConfiguration.class, profileConfig, "profileConfig");
+//            registerBean(File.class, mainConfigFile, "mainConfigFile");
+//            registerBean(File.class, profileConfigFile, "profileConfigFile");
+//            registerBean(YamlConfiguration.class, mainConfig, "mainConfig");
+//            registerBean(YamlConfiguration.class, profileConfig, "profileConfig");
             server = applicationContext.getBean(PeerBanHelperServer.class);
             server.start();
         } catch (Exception e) {
-            log.error("Failed to startup PeerBanHelper, FATAL ERROR", e);
+            log.error(TextManager.tlUI(Lang.PBH_STARTUP_FATAL_ERROR), e);
             throw new RuntimeException(e);
         }
         guiManager.onPBHFullyStarted(server);
         setupShutdownHook();
         guiManager.sync();
+    }
+
+    private static void loadFlagsProperties() {
+        try {
+            var flags = new File(dataDirectory, "flags.properties");
+            if (flags.exists()) {
+                try (var is = Files.newInputStream(flags.toPath())) {
+                    Properties properties = new Properties();
+                    properties.load(is);
+                    System.getProperties().putAll(properties);
+                    log.info("Loaded {} property from data/flags.properties.", properties.size());
+                }
+            }
+        } catch (IOException e) {
+            log.error("Unable to load flags.properties", e);
+        }
+    }
+
+    @SneakyThrows
+    private static void setupReloading() {
+        reloadManager.register(Main.class.getDeclaredMethod("reloadModule"));
+    }
+
+    public static void setupLogback() {
+        LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
+        RollingFileAppender<?> appender = (RollingFileAppender<?>) loggerContext.getLogger("ROOT").getAppender("FILE");
+
+        if (appender != null) {
+            appender.stop(); // 停止当前 appender
+            appender.setFile(new File(logsDirectory, "latest.log").getAbsolutePath()); // 设置新的文件路径
+            // 更新滚动策略
+            SizeAndTimeBasedRollingPolicy<?> policy = (SizeAndTimeBasedRollingPolicy<?>) appender.getRollingPolicy();
+            policy.setFileNamePattern(logsDirectory.getAbsolutePath() + "/%d{yyyy-MM-dd}-%i.log.gz"); // 更新文件名模式
+            policy.start(); // 启动滚动策略
+
+            appender.start(); // 启动 appender
+        }
+
+        try {
+            var targetLevel = System.getProperty("pbh.log.level");
+            if (targetLevel != null) {
+                var rootLogger = LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
+                ch.qos.logback.classic.Logger logbackLogger = (ch.qos.logback.classic.Logger) rootLogger;
+                logbackLogger.setLevel(Level.toLevel(targetLevel));
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    public static ReloadResult reloadModule() {
+        setupConfiguration();
+        loadFlagsProperties();
+        setupProxySettings();
+        return ReloadResult.builder().status(ReloadStatus.SUCCESS).reason("OK!").build();
     }
 
     private static void setupProxySettings() {
@@ -138,6 +191,16 @@ public class Main {
         String host = proxySection.getString("host");
         String port = String.valueOf(proxySection.getInt("port"));
         String nonProxyHost = proxySection.getString("non-proxy-hosts", "");
+
+        // 在设置新的代理属性之前，移除所有现有的设定
+        System.clearProperty("http.proxyHost");
+        System.clearProperty("http.proxyPort");
+        System.clearProperty("https.proxyHost");
+        System.clearProperty("https.proxyPort");
+        System.clearProperty("http.nonProxyHosts");
+        System.clearProperty("https.nonProxyHosts");
+        System.clearProperty("java.net.useSystemProxies");
+
         switch (proxySection.getInt("setting")) {
             case 1 -> System.setProperty("java.net.useSystemProxies", "true");
             case 2 -> {
@@ -147,11 +210,6 @@ public class Main {
                 System.setProperty("https.proxyPort", port);
                 System.setProperty("http.nonProxyHosts", nonProxyHost);
                 System.setProperty("https.nonProxyHosts", nonProxyHost);
-            }
-            case 3 -> {
-                System.setProperty("socksProxyHost", host);
-                System.setProperty("socksProxyPort", port);
-                System.setProperty("socksNonProxyHosts", nonProxyHost);
             }
             default -> System.setProperty("java.net.useSystemProxies", "false");
         }
@@ -165,9 +223,9 @@ public class Main {
                 root = new File(System.getenv("LOCALAPPDATA"), "PeerBanHelper").getAbsolutePath();
             } else {
                 var dataDirectory = new File(System.getProperty("user.home")).toPath();
-                if(osName.contains("mac")){
+                if (osName.contains("mac")) {
                     dataDirectory = dataDirectory.resolve("/Library/Application Support");
-                }else{
+                } else {
                     dataDirectory = dataDirectory.resolve(".config");
                 }
                 root = dataDirectory.resolve("PeerBanHelper").toAbsolutePath().toString();
@@ -181,12 +239,14 @@ public class Main {
         logsDirectory = new File(dataDirectory, "logs");
         configDirectory = new File(dataDirectory, "config");
         pluginDirectory = new File(dataDirectory, "plugins");
-        libraryDirectory = new File(dataDirectory, "libraries");
         debugDirectory = new File(dataDirectory, "debug");
-    }
-
-    private static void setupLog4j2() {
-        //PluginManager.addPackage("com.ghostchu.peerbanhelper.log4j2");
+        if (System.getProperty("pbh.configdir") != null) {
+            configDirectory = new File(System.getProperty("pbh.configdir"));
+        }
+        if (System.getProperty("pbh.logsdir") != null) {
+            logsDirectory = new File(System.getProperty("pbh.logsdir"));
+        }
+        // other directories aren't allowed to change by user to keep necessary structure
     }
 
     private static YamlConfiguration loadConfiguration(File file) {
@@ -198,16 +258,31 @@ public class Main {
             configuration.load(file);
         } catch (IOException | InvalidConfigurationException e) {
             log.error("Unable to load configuration: invalid YAML configuration // 无法加载配置文件：无效的 YAML 配置，请检查是否有语法错误", e);
-            JOptionPane.showMessageDialog(null, "Invalid/Corrupted YAML configuration | 无效或损坏的 YAML 配置文件", String.format("Failed to read configuration: %s", file), JOptionPane.ERROR_MESSAGE);
+            if (!Desktop.isDesktopSupported() || System.getProperty("pbh.nogui") != null || Arrays.stream(startupArgs).anyMatch(arg -> arg.equalsIgnoreCase("nogui"))) {
+                try {
+                    log.error("Bad configuration:  {}", Files.readString(file.toPath()));
+                } catch (IOException ex) {
+                    log.error("Unable to output the bad configuration content", ex);
+                }
+                log.error("Unable to load configuration: invalid YAML configuration // 无法加载配置文件：无效的 YAML 配置，请检查是否有语法错误", e);
+            } else {
+                JOptionPane.showMessageDialog(null, "Invalid/Corrupted YAML configuration | 无效或损坏的 YAML 配置文件", String.format("Failed to read configuration: %s", file), JOptionPane.ERROR_MESSAGE);
+            }
             System.exit(1);
         }
         return configuration;
     }
 
-    private static void setupConfiguration() {
+    public static void setupConfiguration() {
         log.info("Loading configuration...");
         try {
             initConfiguration();
+            mainConfigFile = new File(configDirectory, "config.yml");
+            mainConfig = loadConfiguration(mainConfigFile);
+            new PBHConfigUpdater(mainConfigFile, mainConfig, Main.class.getResourceAsStream("/config.yml")).update(new MainConfigUpdateScript(mainConfig));
+            profileConfigFile = new File(configDirectory, "profile.yml");
+            profileConfig = loadConfiguration(profileConfigFile);
+            new PBHConfigUpdater(profileConfigFile, profileConfig, Main.class.getResourceAsStream("/profile.yml")).update(new ProfileUpdateScript(profileConfig));
             //guiManager.showConfigurationSetupDialog();
             //System.exit(0);
         } catch (IOException e) {
@@ -250,24 +325,13 @@ public class Main {
     }
 
     private static void initGUI(String[] args) {
-        String guiType = "javafx";
+        String guiType = "swing";
         if (!Desktop.isDesktopSupported() || System.getProperty("pbh.nogui") != null || Arrays.stream(args).anyMatch(arg -> arg.equalsIgnoreCase("nogui"))) {
             guiType = "console";
         } else if (Arrays.stream(args).anyMatch(arg -> arg.equalsIgnoreCase("swing"))) {
             guiType = "swing";
         }
-        if ("javafx".equals(guiType)) {
-            try {
-                if (!loadDependencies("/libraries/javafx.maven")) {
-                    guiType = "swing";
-                }
-            } catch (IOException e) {
-                log.error("Failed to load JavaFx dependencies", e);
-                guiType = "swing";
-            }
-        }
         switch (guiType) {
-            case "javafx" -> guiManager = new PBHGuiManager(new JavaFxImpl(args));
             case "swing" -> guiManager = new PBHGuiManager(new SwingGuiImpl(args));
             case "console" -> guiManager = new PBHGuiManager(new ConsoleGuiImpl(args));
         }
@@ -275,32 +339,27 @@ public class Main {
     }
 
     public static String getUserAgent() {
-        return "PeerBanHelper/" + meta.getVersion() + " BTN-Protocol/0.0.1";
-    }
-
-    public static boolean loadDependencies(String mavenManifestPath) throws IOException {
-        try (var is = Main.class.getResourceAsStream(mavenManifestPath)) {
-            String str = new String(ByteStreams.toByteArray(is), StandardCharsets.UTF_8);
-            String[] libraries = str.split("\n");
-            String osName = System.getProperty("os.name").toLowerCase();
-            String sysArch = "win";
-            if (osName.contains("linux")) {
-                sysArch = "linux";
-            } else if (osName.contains("mac")) {
-                sysArch = "mac";
-            }
-            try {
-                librariesLoader.loadLibraries(Arrays.stream(libraries).toList(),
-                        Map.of("system.platform", sysArch, "javafx.version",
-                                Main.getMeta().getJavafx()));
-                return true;
-            } catch (Exception e) {
-                log.error("Unable to load JavaFx dependencies", e);
-                return false;
-            }
+        if (userAgent != null) return userAgent;
+        String userAgentTemplate = "PeerBanHelper/%s (%s; %s,%s,%s) BTN-Protocol/%s BTN-Protocol-Version/%s";
+        var osMXBean = ManagementFactory.getOperatingSystemMXBean();
+        String release = System.getProperty("pbh.release");
+        if (release == null) {
+            release = "unknown";
         }
+        String os = osMXBean.getName();
+        String osVersion = osMXBean.getVersion();
+        String buildNumber = "unknown";
+        String codeName = "";
+        try {
+            SystemInfo info = new SystemInfo();
+            var verInfo = info.getOperatingSystem().getVersionInfo();
+            buildNumber = verInfo.getBuildNumber();
+            codeName = verInfo.getCodeName();
+        } catch (Throwable ignored) {
+        }
+        userAgent = String.format(userAgentTemplate, meta.getVersion(), release, os, osVersion, codeName + buildNumber, PBH_BTN_PROTOCOL_READABLE_VERSION, PBH_BTN_PROTOCOL_IMPL_VERSION);
+        return userAgent;
     }
-
 
     private static void handleCommand(String input) {
 

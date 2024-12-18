@@ -1,5 +1,6 @@
 package com.ghostchu.peerbanhelper.downloader.impl.transmission;
 
+import com.ghostchu.peerbanhelper.alert.AlertManager;
 import com.ghostchu.peerbanhelper.downloader.AbstractDownloader;
 import com.ghostchu.peerbanhelper.downloader.DownloaderLoginResult;
 import com.ghostchu.peerbanhelper.downloader.DownloaderStatistics;
@@ -52,8 +53,8 @@ public class Transmission extends AbstractDownloader {
             API 受限，实际实现起来意义不大
 
             */
-    public Transmission(String name, String blocklistUrl, Config config) {
-        super(name);
+    public Transmission(String name, String blocklistUrl, Config config, AlertManager alertManager) {
+        super(name, alertManager);
         this.config = config;
         this.client = new TrClient(config.getEndpoint() + config.getRpcUrl(), config.getUsername(), config.getPassword(), config.isVerifySsl(), HttpClient.Version.valueOf(config.getHttpVersion()));
         this.blocklistUrl = blocklistUrl;
@@ -65,14 +66,14 @@ public class Transmission extends AbstractDownloader {
         return pbhServerAddress + "/blocklist/p2p-plain-format";
     }
 
-    public static Transmission loadFromConfig(String name, String pbhServerAddress, ConfigurationSection section) {
+    public static Transmission loadFromConfig(String name, String pbhServerAddress, ConfigurationSection section, AlertManager alertManager) {
         Config config = Config.readFromYaml(section);
-        return new Transmission(name, generateBlocklistUrl(pbhServerAddress), config);
+        return new Transmission(name, generateBlocklistUrl(pbhServerAddress), config, alertManager);
     }
 
-    public static Transmission loadFromConfig(String name, String pbhServerAddress, JsonObject section) {
+    public static Transmission loadFromConfig(String name, String pbhServerAddress, JsonObject section, AlertManager alertManager) {
         Transmission.Config config = JsonUtil.getGson().fromJson(section.toString(), Transmission.Config.class);
-        return new Transmission(name, generateBlocklistUrl(pbhServerAddress), config);
+        return new Transmission(name, generateBlocklistUrl(pbhServerAddress), config, alertManager);
     }
 
     @Override
@@ -124,7 +125,7 @@ public class Transmission extends AbstractDownloader {
 
     @Override
     public List<Torrent> getTorrents() {
-        RqTorrentGet torrent = new RqTorrentGet(Fields.ID, Fields.HASH_STRING, Fields.NAME, Fields.PEERS_CONNECTED, Fields.STATUS, Fields.TOTAL_SIZE, Fields.PEERS, Fields.RATE_DOWNLOAD, Fields.RATE_UPLOAD, Fields.PEER_LIMIT, Fields.PERCENT_DONE);
+        RqTorrentGet torrent = new RqTorrentGet(Fields.ID, Fields.HASH_STRING, Fields.NAME, Fields.PEERS_CONNECTED, Fields.STATUS, Fields.TOTAL_SIZE, Fields.PEERS, Fields.RATE_DOWNLOAD, Fields.RATE_UPLOAD, Fields.PEER_LIMIT, Fields.PERCENT_DONE, Fields.SIZE_WHEN_DONE);
         TypedResponse<RsTorrentGet> rsp = client.execute(torrent);
         return rsp.getArgs().getTorrents().stream()
                 .filter(t -> t.getStatus() == Status.DOWNLOADING || t.getStatus() == Status.SEEDING)
@@ -177,7 +178,7 @@ public class Transmission extends AbstractDownloader {
         RqTorrentGet torrentList = new RqTorrentGet(Fields.ID, Fields.HASH_STRING, Fields.NAME,
                 Fields.PEERS_CONNECTED,
                 Fields.STATUS, Fields.TOTAL_SIZE, Fields.PEERS, Fields.RATE_DOWNLOAD,
-                Fields.RATE_UPLOAD, Fields.PEER_LIMIT, Fields.PERCENT_DONE, Fields.IS_PRIVATE);
+                Fields.RATE_UPLOAD, Fields.PEER_LIMIT, Fields.PERCENT_DONE, Fields.IS_PRIVATE, Fields.SIZE_WHEN_DONE);
         TypedResponse<RsTorrentGet> rsp = client.execute(torrentList);
         List<Long> torrents = rsp.getArgs().getTorrents().stream()
                 .filter(t -> t.getStatus() != Status.STOPPED)
@@ -195,6 +196,9 @@ public class Transmission extends AbstractDownloader {
 
     @Override
     public void relaunchTorrentIfNeededByTorrentWrapper(Collection<TorrentWrapper> torrents) {
+        if(System.getProperty("pbh.transmission.disable-torrent-relaunch") != null) {
+            return;
+        }
         relaunchTorrents(torrents.stream().filter(t -> {
             try {
                 Long.parseLong(t.getId());

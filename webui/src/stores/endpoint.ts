@@ -1,20 +1,19 @@
-import { defineStore } from 'pinia'
-import { useStorage } from '@vueuse/core'
+import type { donateStatus, mainfest, release } from '@/api/model/manifest'
+import { basePath } from '@/router'
+import { IncorrectTokenError, login, NeedInitError } from '@/service/login'
 import {
   getLatestVersion,
   getManifest,
+  GetManifestError,
   getPBHPlusStatus,
-  setPHBPlusKey,
-  GetManifestError
+  setPHBPlusKey
 } from '@/service/version'
-import { computed, readonly, ref, type DeepReadonly } from 'vue'
-import type { donateStatus, release } from '@/api/model/manifest'
-import { IncorrectTokenError, login, NeedInitError } from '@/service/login'
-import { compare } from 'compare-versions'
-import type { mainfest } from '@/api/model/manifest'
-import { basePath } from '@/router'
-import mitt from 'mitt'
 import networkFailRetryNotication from '@/utils/networkRetry'
+import { useStorage } from '@vueuse/core'
+import { compare } from 'compare-versions'
+import mitt from 'mitt'
+import { defineStore } from 'pinia'
+import { computed, readonly, ref, type DeepReadonly } from 'vue'
 
 function newPromiseLock<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void
@@ -48,7 +47,7 @@ export const useEndpointStore = defineStore('endpoint', () => {
   const status = ref<'checking' | 'needLogin' | 'pass' | 'fail' | 'needInit'>('checking')
   const error = ref<Error | null>(null)
   const checkUpgradeError = ref<Error | null>(null)
-  const emmitter = ref(mitt())
+  const emitter = ref(mitt())
 
   const setAuthToken = async (token: string | null, rememberPassword = false) => {
     if (serverManifest.value && compare(serverManifest.value.version.version, '4.0.0', '<')) {
@@ -135,7 +134,8 @@ export const useEndpointStore = defineStore('endpoint', () => {
       const latestRelease = await getLatestVersion()
       latestVersion.value = {
         tagName: latestRelease.tag_name,
-        url: latestRelease.html_url
+        url: latestRelease.html_url,
+        changeLog: latestRelease.body ?? ''
       }
     } catch (err) {
       checkUpgradeError.value = err as Error
@@ -185,7 +185,8 @@ export const useEndpointStore = defineStore('endpoint', () => {
     setAuthToken,
     plusStatus,
     setPlusKey,
-    emmitter,
+    getPlusStatus,
+    emitter: emitter,
     assertResponseLogin: (res: Response) => {
       if (res.status === 403) {
         setAuthToken(null)

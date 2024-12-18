@@ -1,6 +1,7 @@
 package com.ghostchu.peerbanhelper.database;
 
 import com.ghostchu.peerbanhelper.Main;
+import com.ghostchu.peerbanhelper.text.Lang;
 import com.j256.ormlite.field.DataPersisterManager;
 import com.j256.ormlite.jdbc.JdbcSingleConnectionSource;
 import com.j256.ormlite.jdbc.db.SqliteDatabaseType;
@@ -14,14 +15,17 @@ import java.io.File;
 import java.sql.Connection;
 import java.sql.SQLException;
 
+import static com.ghostchu.peerbanhelper.text.TextManager.tlUI;
+
 @Getter
 @Slf4j
 @Component
 public class Database {
     private JdbcSingleConnectionSource dataSource;
     private HikariDataSource hikari;
+    private DatabaseHelper helper;
 
-    public Database() throws SQLException {
+    public Database() throws SQLException, ClassNotFoundException {
         File databaseDirectory = new File(Main.getDataDirectory(), "persist");
         if (!databaseDirectory.exists()) {
             databaseDirectory.mkdirs();
@@ -50,10 +54,11 @@ public class Database {
                 stmt.executeUpdate("PRAGMA synchronous = NORMAL");
                 stmt.executeUpdate("PRAGMA journal_mode = WAL");
             } catch (Exception e) {
-                log.warn("Unable to set SQLite optimized PRAGMA arguments", e);
+                log.warn(tlUI(Lang.UNABLE_SET_SQLITE_OPTIMIZED_PRAGMA), e);
             }
         }
         this.dataSource = new JdbcSingleConnectionSource("jdbc:sqlite:" + file, new SqliteDatabaseType(), rawConnection);
+        this.helper = new DatabaseHelper(this);
         //  this.dataSource = new DataSourceConnectionSource( new HikariDataSource(config), new SqliteDatabaseType());
     }
 

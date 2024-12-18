@@ -12,6 +12,7 @@
       baseSize: 4,
       bufferSize: 1
     }"
+    :bordered="false"
     column-resizable
     size="medium"
     class="banlog-table"
@@ -106,7 +107,7 @@ const columns = [
       '/' +
       t('page.banlog.banlogTable.column.unbanTime'),
     slotName: 'banAt',
-    width: 210
+    width: 220
   },
   {
     title: () => t('page.banlog.banlogTable.column.peerPort'),

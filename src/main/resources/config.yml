@@ -1,13 +1,21 @@
-config-version: 19
+config-version: 26
 # 设置程序语言
 # Set the program language
 # default 跟随操作系统 (Follow the operating system)
 # en_us English (US)
 # zh_cn Chinese Simplified (简体中文)
 language: default
-# PBH Plus 捐赠密钥 (https://afdian.com/a/Ghost_chu)，如果你有的话，就填在这里吧
-# PBH Plus donation key, if you have one, please fill to there
-pbh-plus-key: ''
+# PBH Plus 的捐赠密钥，填写后将激活捐赠功能。
+# PeerBanHelper 是一个非营利、开放源代码的免费软件。维护 PeerBanHelper 是一项持续的任务，
+# 我们的团队成员每个月在上面花费大量的时间与恶意Peer进行技术对抗，因此你的支持对我们来说至关重要。
+# 如果您不想捐赠 PeerBanHelper，请通过 WebUI 创建本地免费许可证，它与通过捐赠获取的捐赠密钥在功能上相同。
+# A donation key for PBH Plus, which when filled out will activate the donation feature.
+# PeerBanHelper is a non-profit, open source, freeware program. Maintaining PeerBanHelper is an ongoing task,
+# and our team members spend a lot of time on it each month in technical confrontations with malicious Peers,
+# so your support is vital to us.
+# If you don't want to donate PeerBanHelper, please create a local free license via WebUI,
+# which is functionally identical to the donation key obtained via donation.
+pbh-plus-key: ""
 # Http 服务器设置
 # Http Server Settings
 server:
@@ -77,6 +85,11 @@ btn:
   # The BTN instance URL, you need find a BTN instance
   # By default, PBH-BTN official BTN instance will be used
   config-url: "https://sparkle.ghostchu.com/ping/config"
+  # 是否允许 PeerBanHelper 接收来自 BTN 服务器的 Aviator 脚本
+  # 请仅在受信任的 BTN 服务器上启用此功能，运行来自未知来源的脚本可能会导致设备遭到攻击
+  # Allow PeerBanHelper to receive Aviator script from BTN server
+  # Enable this option only on trusted BTN server, running script from unknown source may cause your device under attack
+  allow-script-execute: false
 # 封禁列表处理
 # PBH 能够除了调用 BT 客户端的封禁 API 外，还能够进行如下操作，以便适配更多其它客户端
 # Banlist invoker
@@ -126,8 +139,8 @@ ip-database:
   # 允许自动更新 GeoIP 数据库文件
   # Allow PBH update GeoIP database file while restarting if needed
   auto-update: true
-  database-city: 'GeoLite2-City'
-  database-asn: 'GeoLite2-ASN'
+  database-city: "GeoLite2-City"
+  database-asn: "GeoLite2-ASN"
 # 代理服务器设定
 # Proxy server settings
 proxy:
@@ -136,7 +149,6 @@ proxy:
   # 0 = 不使用代理 - No proxy
   # 1 = 使用系统代理 - Use system proxy
   # 2 = 使用 HTTP(s) 代理 - Use HTTP(s) proxy
-  # 3 = 使用 socks5 代理(可能无法使用) - Use socks5 proxy (may not work well)
   setting: 1
   # 代理服务器地址 - Proxy server host
   host: "127.0.0.1"
@@ -144,13 +156,20 @@ proxy:
   port: 7890
   # 代理例外地址，使用 | 分隔不同条目 - Exception list, spilt with | symbol
   non-proxy-hosts: "localhost|127.*|192.168.*|10.*|172.16.*|172.17.*|172.18.*|172.19.*|172.20.*|172.21.*|172.22.*|172.23.*|172.24.*|172.25.*|172.26.*|172.27.*|172.28.*|172.29.*|172.30.*|172.31.*|*.local|*.lan"
-privacy:
-  # 启用自动错误报告 - Enable automatic error reporting
-  # 错误报告信息不包含敏感信息或您的 IP 地址
-  # Error reports will not contain sensitive information or your IP address.
-  error-reporting: true
+
 performance:
   # 启用 Windows 平台上的 EcoQoS API以节约能源消耗，作为交换，程序运行速度将降低，定时任务可能推迟
   # Enable EcoQoS API on Windows Platform for power saving, for exchange, the program performance will reduce and cronjobs may delay
   # https://devblogs.microsoft.com/performance-diagnostics/introducing-ecoqos/
   windows-ecoqos-api: true
+
+# PeerBanHelper 去中心化网络服务 - Decentralized network service
+# 请配置一个可用的 Kubo IPFS 节点 - Please configure an available Kubo IPFS node
+decentralized:
+  enabled: false
+  # Kubo RPC MultiAddr
+  kubo-rpc: "/ip4/127.0.0.1/tcp/5001"
+  features:
+    # 发布当前封禁列表到 IPFS 以允许它人订阅您的封禁列表内容，时间单位：毫秒，设置为 -1 以禁用
+    # Publish current banlist to IPFS to allow others subscribe your banlist, time unit: milliseconds, set to -1 to disable
+    publish-banlist: 3600000
